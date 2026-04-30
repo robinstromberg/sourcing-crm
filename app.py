@@ -2,7 +2,7 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import smtplib
-from email.mime.text import MIME_Text
+from email.mime.text import MIMEText
 import time
 import random
 
