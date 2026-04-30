@@ -1,0 +1,6 @@
+{
+  "name": "SourcingEU CRM",
+  "description": "En komplett CRM-applikation för SourcingEU med kontakthantering, CSV-import och personifierad mejl-outreach via Brevo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
