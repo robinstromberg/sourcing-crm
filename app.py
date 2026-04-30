@@ -27,28 +27,26 @@ choice = st.sidebar.selectbox("Meny", menu)
 
 if choice == "Inställningar":
     st.title("Inställningar")
-    st.info("Dina uppgifter sparas nu direkt i koden för att de inte ska försvinna.")
+    st.info("Fyll i dina uppgifter nedan och tryck på Spara.")
     
     with st.container():
         col1, col2 = st.columns(2)
         
-        # --- HÄR FYLLER DU I DINA UPPGIFTER DIREKT ---
-       user = col1.text_input("SMTP Användarnamn (Login)", "DIN_MEJL_HÄR@DOMÄN.COM")
-      pwd = col2.text_input("SMTP Lösenord (Master Password)", "DIN_SMTP_NYCKEL_HÄR", type="password")
-
-        
-        host = col1.text_input("SMTP Host", "smtp-relay.brevo.com")
+        host = col1.text_input("SMTP Host", "://brevo.com")
         port = col2.text_input("SMTP Port", "587")
-        user = col1.text_input("SMTP Användarnamn (Login)", brevo_user)
-        pwd = col2.text_input("SMTP Lösenord (Master Password)", brevo_pwd, type="password")
+        
+        # ÄNDRA DESSA TVÅ RADER NEDAN:
+        user = col1.text_input("SMTP Användarnamn (Login)", "DIN_MEJL_HÄR@DOMÄN.COM")
+        pwd = col2.text_input("SMTP Lösenord (Master Password)", "DIN_NYCKEL_HÄR", type="password")
+        
         sender_email = col1.text_input("Avsändarens E-post", "info@sourcingeu.com")
         sender_name = col2.text_input("Avsändarens Namn", "SourcingEU Team")
         
-        if st.button("Spara & Aktivera Inställningar"):
+        if st.button("Spara Inställningar"):
             c.execute("DELETE FROM settings")
             c.execute("INSERT INTO settings VALUES (?,?,?,?,?,?)", (host, port, user, pwd, sender_email, sender_name))
             conn.commit()
-            st.success("Inställningar sparade och låsta!")
+            st.success("Inställningar sparade!")
 
 elif choice == "Kontakter":
     st.title("Kontakthantering")
@@ -97,7 +95,7 @@ elif choice == "Outreach":
     df = pd.read_sql_query("SELECT * FROM contacts WHERE status = 'Inte kontaktad'", conn)
     if df.empty:
         st.warning("Inga nya kontakter att mejla.")
-        if st.button("Nollställ alla kontakter (för nytt test)"):
+        if st.button("Nollställ alla till 'Inte kontaktad'"):
             c.execute("UPDATE contacts SET status='Inte kontaktad'")
             conn.commit()
             st.rerun()
@@ -122,7 +120,7 @@ elif choice == "Outreach":
                         c.execute("SELECT name FROM contacts WHERE email=?", (target_email,))
                         contact_name = c.fetchone()[0]
                         
-                        final_msg = message_body.replace("{{namn}}", contact_name)
+                        final_msg = message_body.replace("{{namn}}", str(contact_name))
                         
                         msg = MIMEMultipart()
                         msg['From'] = f"{s[5]} <{s[4]}>"
