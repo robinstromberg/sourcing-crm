@@ -100,24 +100,50 @@ elif choice == "Outreach":
         subject = st.text_input("Ämnesrad")
         message = st.text_area("Meddelande (Använd {{namn}} för personifiering)")
         
-        if st.button("Starta utskick"):
-            # Hämta inställningar
+                if st.button("Starta utskick"):
             c.execute("SELECT * FROM settings")
             s = c.fetchone()
             if not s:
                 st.error("Du måste fylla i inställningarna först!")
             else:
                 progress_bar = st.progress(0)
-                for i, target_email in enumerate(selected_contacts):
-                    # Här skickas mejlet (simulerat i detta exempel för säkerhet, 
-                    # men koden är redo för riktig SMTP)
-                    st.write(f"Skickar till {target_email}...")
-                    time.sleep(random.randint(5, 10)) # Säkerhetsfördröjning
+                try:
+                    # Starta SMTP-anslutningen
+                    server = smtplib.SMTP(s[0], int(s[1]))
+                    server.starttls()
+                    server.login(s[2], s[3])
+
+                    for i, target_email in enumerate(selected_contacts):
+                        # Hämta namnet för personifiering
+                        c.execute("SELECT name FROM contacts WHERE email=?", (target_email,))
+                        contact_name = c.fetchone()[0]
+                        
+                        # Skapa mejlet
+                        personalized_message = message.replace("{{namn}}", contact_name)
+                        msg = MIMEText(personalized_message)
+                        msg['Subject'] = subject
+                        msg['From'] = f"{s[5]} <{s[4]}>"
+                        msg['To'] = target_email
+
+                        # Skicka
+                        server.sendmail(s[4], target_email, msg.as_string())
+                        
+                        st.write(f"✅ Skickat till {target_email}...")
+                        
+                        # Uppdatera databasen
+                        c.execute("UPDATE contacts SET status='Mejlad', last_contact=date('now') WHERE email=?", (target_email,))
+                        conn.commit()
+                        
+                        # Vänta mellan 10-20 sekunder (för säkerhet)
+                        time.sleep(random.randint(10, 20))
+                        progress_bar.progress((i + 1) / len(selected_contacts))
                     
-                    c.execute("UPDATE contacts SET status='Mejlad', last_contact=date('now') WHERE email=?", (target_email,))
-                    conn.commit()
-                    progress_bar.progress((i + 1) / len(selected_contacts))
-                st.success("Alla mejl skickade!")
+                    server.quit()
+                    st.success("Alla mejl skickade på riktigt!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Ett fel uppstod: {e}")
+
 
 elif choice == "Statistik":
     st.title("Statistik")
