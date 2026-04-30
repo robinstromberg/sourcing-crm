@@ -46,23 +46,48 @@ if choice == "Inställningar":
 elif choice == "Kontakter":
     st.title("Kontakthantering")
     
-    # Lägg till kontakt manuellt
-    with st.expander("Lägg till ny kontakt"):
-        name = st.text_input("Namn")
-        comp = st.text_input("Företag")
-        email = st.text_input("E-post")
-        ctype = st.selectbox("Typ", ["Producent", "Inköpare"])
-        if st.button("Spara kontakt"):
+    # --- NY SEKTION: IMPORTERA CSV ---
+    with st.expander("Importera kontakter från CSV-fil"):
+        uploaded_file = st.file_uploader("Välj en CSV-fil", type="csv")
+        if uploaded_file is not None:
+            data = pd.read_csv(uploaded_file)
+            st.write("Förhandsgranskning av filen:")
+            st.dataframe(data.head())
+            
+            # Knappar för att välja rätt kolumner
+            col_name = st.selectbox("Vilken kolumn innehåller NAMN?", data.columns)
+            col_email = st.selectbox("Vilken kolumn innehåller E-POST?", data.columns)
+            col_comp = st.selectbox("Vilken kolumn innehåller FÖRETAG?", data.columns)
+            
+            if st.button("Genomför import"):
+                for index, row in data.iterrows():
+                    c.execute("INSERT INTO contacts VALUES (?,?,?,?,?,?)", 
+                              (row[col_name], row[col_comp], row[col_email], "Producent", "Inte kontaktad", "-"))
+                conn.commit()
+                st.success(f"Importerat {len(data)} kontakter!")
+                st.rerun() # Laddar om sidan så listan syns direkt
+
+    # --- BEHÅLL MANUELL INPUT ---
+    with st.expander("Lägg till ny kontakt manuellt"):
+        col_m1, col_m2 = st.columns(2)
+        name = col_m1.text_input("Namn")
+        comp = col_m2.text_input("Företag")
+        email = col_m1.text_input("E-post")
+        ctype = col_m2.selectbox("Typ", ["Producent", "Inköpare"])
+        if st.button("Spara manuellt"):
             c.execute("INSERT INTO contacts VALUES (?,?,?,?,?,?)", (name, comp, email, ctype, "Inte kontaktad", "-"))
             conn.commit()
             st.success(f"{name} tillagd!")
+            st.rerun()
 
-    # Visa kontakter
+    # Visa och exportera befintliga kontakter
+    st.subheader("Din kontaktlista")
     df = pd.read_sql_query("SELECT * FROM contacts", conn)
     st.dataframe(df, use_container_width=True)
     
     csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button("Exportera till CSV (Backup)", csv, "crm_backup.csv", "text/csv")
+    st.download_button("Exportera/Backup till CSV", csv, "crm_backup.csv", "text/csv")
+
 
 elif choice == "Outreach":
     st.title("Skicka Outreach")
