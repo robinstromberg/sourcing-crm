@@ -19,9 +19,18 @@ c.execute('''CREATE TABLE IF NOT EXISTS contacts
              (name TEXT, company TEXT, email TEXT, type TEXT, status TEXT, last_contact TEXT)''')
 conn.commit()
 
-# Meny
+# Meny i sidofältet
+st.sidebar.title("SourcingEU CRM")
 menu = ["Kontakter", "Outreach", "Statistik"]
-choice = st.sidebar.selectbox("Meny", menu)
+choice = st.sidebar.selectbox("Välj vy", menu)
+
+# --- NY FUNKTION: RADERA ALLT (längst ner i sidomenyn) ---
+st.sidebar.markdown("---")
+if st.sidebar.button("⚠️ RADERA ALLA KONTAKTER"):
+    c.execute("DELETE FROM contacts")
+    conn.commit()
+    st.sidebar.success("Databasen är rensad!")
+    st.rerun()
 
 if choice == "Kontakter":
     st.title("Kontakthantering")
@@ -47,10 +56,10 @@ if choice == "Kontakter":
 
     with st.expander("Lägg till ny kontakt manuellt"):
         col_m1, col_m2 = st.columns(2)
-        name = st.text_input("Namn")
-        comp = st.text_input("Företag")
-        email = st.text_input("E-post")
-        ctype = st.selectbox("Typ", ["Producent", "Inköpare"])
+        name = col_m1.text_input("Namn")
+        comp = col_m2.text_input("Företag")
+        email = col_m1.text_input("E-post")
+        ctype = col_m2.selectbox("Typ", ["Producent", "Inköpare"])
         if st.button("Spara manuellt"):
             c.execute("INSERT INTO contacts VALUES (?,?,?,?,?,?)", (name, comp, email, ctype, "Inte kontaktad", "-"))
             conn.commit()
@@ -69,11 +78,7 @@ elif choice == "Outreach":
     
     df = pd.read_sql_query("SELECT * FROM contacts WHERE status = 'Inte kontaktad'", conn)
     if df.empty:
-        st.warning("Inga nya kontakter att mejla.")
-        if st.button("Nollställ alla till 'Inte kontaktad'"):
-            c.execute("UPDATE contacts SET status='Inte kontaktad'")
-            conn.commit()
-            st.rerun()
+        st.warning("Inga nya kontakter att mejla. (Använd knappen i sidomenyn om du vill nollställa listan)")
     else:
         selected_emails = st.multiselect("Välj mottagare", df['email'].tolist())
         subject = st.text_input("Ämnesrad")
@@ -81,7 +86,6 @@ elif choice == "Outreach":
         
         if st.button("Starta utskick"):
             try:
-                # Kopplar upp med dina SECRETS
                 server = smtplib.SMTP(st.secrets["SMTP_HOST"], st.secrets["SMTP_PORT"])
                 server.starttls()
                 server.login(st.secrets["SMTP_USER"], st.secrets["SMTP_PWD"])
@@ -89,7 +93,8 @@ elif choice == "Outreach":
                 progress_bar = st.progress(0)
                 for i, target_email in enumerate(selected_emails):
                     c.execute("SELECT name FROM contacts WHERE email=?", (target_email,))
-                    contact_name = c.fetchone()[0]
+                    contact_info = c.fetchone()
+                    contact_name = contact_info[0] if contact_info else "vän"
                     
                     final_msg = message_body.replace("{{namn}}", str(contact_name))
                     
@@ -105,7 +110,7 @@ elif choice == "Outreach":
                     conn.commit()
                     
                     st.write(f"✅ Skickat till {target_email}")
-                    time.sleep(random.randint(10, 20)) 
+                    time.sleep(random.randint(5, 10)) 
                     progress_bar.progress((i + 1) / len(selected_emails))
                 
                 server.quit()
