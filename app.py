@@ -27,22 +27,28 @@ choice = st.sidebar.selectbox("Meny", menu)
 
 if choice == "Inställningar":
     st.title("Inställningar")
-    st.info("Börja här för att koppla ditt konto till Brevo.")
+    st.info("Dina uppgifter sparas nu direkt i koden för att de inte ska försvinna.")
     
     with st.container():
         col1, col2 = st.columns(2)
+        
+        # --- HÄR FYLLER DU I DINA UPPGIFTER DIREKT ---
+       user = col1.text_input("SMTP Användarnamn (Login)", "DIN_MEJL_HÄR@DOMÄN.COM")
+      pwd = col2.text_input("SMTP Lösenord (Master Password)", "DIN_SMTP_NYCKEL_HÄR", type="password")
+
+        
         host = col1.text_input("SMTP Host", "smtp-relay.brevo.com")
         port = col2.text_input("SMTP Port", "587")
-        user = col1.text_input("SMTP Användarnamn (Login)")
-        pwd = col2.text_input("SMTP Lösenord (Master Password)", type="password")
+        user = col1.text_input("SMTP Användarnamn (Login)", brevo_user)
+        pwd = col2.text_input("SMTP Lösenord (Master Password)", brevo_pwd, type="password")
         sender_email = col1.text_input("Avsändarens E-post", "info@sourcingeu.com")
         sender_name = col2.text_input("Avsändarens Namn", "SourcingEU Team")
         
-        if st.button("Spara Inställningar"):
+        if st.button("Spara & Aktivera Inställningar"):
             c.execute("DELETE FROM settings")
             c.execute("INSERT INTO settings VALUES (?,?,?,?,?,?)", (host, port, user, pwd, sender_email, sender_name))
             conn.commit()
-            st.success("Inställningar sparade!")
+            st.success("Inställningar sparade och låsta!")
 
 elif choice == "Kontakter":
     st.title("Kontakthantering")
@@ -68,10 +74,10 @@ elif choice == "Kontakter":
 
     with st.expander("Lägg till ny kontakt manuellt"):
         col_m1, col_m2 = st.columns(2)
-        name = col_m1.text_input("Namn")
-        comp = col_m2.text_input("Företag")
-        email = col_m1.text_input("E-post")
-        ctype = col_m2.selectbox("Typ", ["Producent", "Inköpare"])
+        name = st.text_input("Namn")
+        comp = st.text_input("Företag")
+        email = st.text_input("E-post")
+        ctype = st.selectbox("Typ", ["Producent", "Inköpare"])
         if st.button("Spara manuellt"):
             c.execute("INSERT INTO contacts VALUES (?,?,?,?,?,?)", (name, comp, email, ctype, "Inte kontaktad", "-"))
             conn.commit()
@@ -91,6 +97,10 @@ elif choice == "Outreach":
     df = pd.read_sql_query("SELECT * FROM contacts WHERE status = 'Inte kontaktad'", conn)
     if df.empty:
         st.warning("Inga nya kontakter att mejla.")
+        if st.button("Nollställ alla kontakter (för nytt test)"):
+            c.execute("UPDATE contacts SET status='Inte kontaktad'")
+            conn.commit()
+            st.rerun()
     else:
         selected_emails = st.multiselect("Välj mottagare", df['email'].tolist())
         subject = st.text_input("Ämnesrad")
@@ -109,11 +119,9 @@ elif choice == "Outreach":
                     
                     progress_bar = st.progress(0)
                     for i, target_email in enumerate(selected_emails):
-                        # Hämta personuppgifter
                         c.execute("SELECT name FROM contacts WHERE email=?", (target_email,))
                         contact_name = c.fetchone()[0]
                         
-                        # Personifiera
                         final_msg = message_body.replace("{{namn}}", contact_name)
                         
                         msg = MIMEMultipart()
@@ -124,7 +132,6 @@ elif choice == "Outreach":
 
                         server.sendmail(s[4], target_email, msg.as_string())
                         
-                        # Uppdatera status
                         c.execute("UPDATE contacts SET status='Mejlad', last_contact=date('now') WHERE email=?", (target_email,))
                         conn.commit()
                         
