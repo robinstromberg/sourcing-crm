@@ -15,40 +15,15 @@ conn = sqlite3.connect('crm_data.db', check_same_thread=False)
 c = conn.cursor()
 
 # Skapa tabeller om de inte finns
-c.execute('''CREATE TABLE IF NOT EXISTS settings 
-             (host TEXT, port TEXT, user TEXT, pwd TEXT, sender_email TEXT, sender_name TEXT)''')
 c.execute('''CREATE TABLE IF NOT EXISTS contacts 
              (name TEXT, company TEXT, email TEXT, type TEXT, status TEXT, last_contact TEXT)''')
 conn.commit()
 
 # Meny
-menu = ["Inställningar", "Kontakter", "Outreach", "Statistik"]
+menu = ["Kontakter", "Outreach", "Statistik"]
 choice = st.sidebar.selectbox("Meny", menu)
 
-if choice == "Inställningar":
-    st.title("Inställningar")
-    st.info("Fyll i dina uppgifter nedan och tryck på Spara.")
-    
-    with st.container():
-        col1, col2 = st.columns(2)
-        
-        host = col1.text_input("SMTP Host", "://brevo.com")
-        port = col2.text_input("SMTP Port", "587")
-        
-        # ÄNDRA DESSA TVÅ RADER NEDAN:
-        user = col1.text_input("SMTP Användarnamn (Login)", "DIN_MEJL_HÄR@DOMÄN.COM")
-        pwd = col2.text_input("SMTP Lösenord (Master Password)", "DIN_NYCKEL_HÄR", type="password")
-        
-        sender_email = col1.text_input("Avsändarens E-post", "info@sourcingeu.com")
-        sender_name = col2.text_input("Avsändarens Namn", "SourcingEU Team")
-        
-        if st.button("Spara Inställningar"):
-            c.execute("DELETE FROM settings")
-            c.execute("INSERT INTO settings VALUES (?,?,?,?,?,?)", (host, port, user, pwd, sender_email, sender_name))
-            conn.commit()
-            st.success("Inställningar sparade!")
-
-elif choice == "Kontakter":
+if choice == "Kontakter":
     st.title("Kontakthantering")
     
     with st.expander("Importera kontakter från CSV-fil"):
@@ -105,43 +80,39 @@ elif choice == "Outreach":
         message_body = st.text_area("Meddelande (Använd {{namn}} för personifiering)")
         
         if st.button("Starta utskick"):
-            c.execute("SELECT * FROM settings")
-            s = c.fetchone()
-            if not s:
-                st.error("Fyll i inställningarna först!")
-            else:
-                try:
-                    server = smtplib.SMTP(s[0], int(s[1]))
-                    server.starttls()
-                    server.login(s[2], s[3])
+            try:
+                # Kopplar upp med dina SECRETS
+                server = smtplib.SMTP(st.secrets["SMTP_HOST"], st.secrets["SMTP_PORT"])
+                server.starttls()
+                server.login(st.secrets["SMTP_USER"], st.secrets["SMTP_PWD"])
+                
+                progress_bar = st.progress(0)
+                for i, target_email in enumerate(selected_emails):
+                    c.execute("SELECT name FROM contacts WHERE email=?", (target_email,))
+                    contact_name = c.fetchone()[0]
                     
-                    progress_bar = st.progress(0)
-                    for i, target_email in enumerate(selected_emails):
-                        c.execute("SELECT name FROM contacts WHERE email=?", (target_email,))
-                        contact_name = c.fetchone()[0]
-                        
-                        final_msg = message_body.replace("{{namn}}", str(contact_name))
-                        
-                        msg = MIMEMultipart()
-                        msg['From'] = f"{s[5]} <{s[4]}>"
-                        msg['To'] = target_email
-                        msg['Subject'] = subject
-                        msg.attach(MIMEText(final_msg, 'plain'))
+                    final_msg = message_body.replace("{{namn}}", str(contact_name))
+                    
+                    msg = MIMEMultipart()
+                    msg['From'] = f"{st.secrets['SENDER_NAME']} <{st.secrets['SENDER_EMAIL']}>"
+                    msg['To'] = target_email
+                    msg['Subject'] = subject
+                    msg.attach(MIMEText(final_msg, 'plain'))
 
-                        server.sendmail(s[4], target_email, msg.as_string())
-                        
-                        c.execute("UPDATE contacts SET status='Mejlad', last_contact=date('now') WHERE email=?", (target_email,))
-                        conn.commit()
-                        
-                        st.write(f"✅ Skickat till {target_email}")
-                        time.sleep(random.randint(5, 10))
-                        progress_bar.progress((i + 1) / len(selected_emails))
+                    server.sendmail(st.secrets["SENDER_EMAIL"], target_email, msg.as_string())
                     
-                    server.quit()
-                    st.success("Klart!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Fel: {e}")
+                    c.execute("UPDATE contacts SET status='Mejlad', last_contact=date('now') WHERE email=?", (target_email,))
+                    conn.commit()
+                    
+                    st.write(f"✅ Skickat till {target_email}")
+                    time.sleep(random.randint(10, 20)) 
+                    progress_bar.progress((i + 1) / len(selected_emails))
+                
+                server.quit()
+                st.success("Alla mejl skickade!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Fel vid utskick: {e}")
 
 elif choice == "Statistik":
     st.title("Statistik")
